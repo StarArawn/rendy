@@ -97,6 +97,7 @@ fn create_surface<B: gfx_hal::Backend>(instance: &Box<dyn std::any::Any>, window
 pub struct Surface<B: gfx_hal::Backend> {
     window: std::sync::Arc<winit::Window>,
     raw: B::Surface,
+    present_mode: gfx_hal::PresentMode,
 }
 
 impl<B> std::fmt::Debug for Surface<B>
@@ -123,6 +124,7 @@ where
         Surface {
             window,
             raw,
+            present_mode: gfx_hal::PresentMode::Mailbox, // Ideally mailbox.
         }
     }
 
@@ -149,6 +151,17 @@ where
         }).unwrap()
     }
 
+    /// Set the desired presentation mode.
+    /// Note: If the physical device dosn't support the chosen mode 
+    /// the first ideal mode will be picked. 
+    /// Mailbox
+    /// Fifo
+    /// Relaxed
+    /// Imediate
+    pub fn set_present_mode(&mut self, present_mode: gfx_hal::PresentMode) {
+        self.present_mode = present_mode;
+    }
+
     /// Cast surface into render target.
     pub unsafe fn into_target(
         mut self,
@@ -159,12 +172,18 @@ where
     ) -> Result<Target<B>, failure::Error> {
         let (capabilities, formats, present_modes, _alpha) = gfx_hal::Surface::compatibility(&self.raw, physical_device);
 
-        let present_mode = *present_modes.iter().max_by_key(|mode| match mode {
+        let mut present_mode = *present_modes.iter().max_by_key(|mode| match mode {
             gfx_hal::PresentMode::Immediate => 0,
             gfx_hal::PresentMode::Mailbox => 3,
             gfx_hal::PresentMode::Fifo => 2,
             gfx_hal::PresentMode::Relaxed => 1,
         }).unwrap();
+
+        let picked_mode_supported = present_modes.iter().any(|mode| *mode == self.present_mode);
+
+        if present_mode != self.present_mode && picked_mode_supported {
+            present_mode = self.present_mode;
+        }
 
         log::info!("Surface present modes: {:#?}. Pick {:#?}", present_modes, present_mode);
 

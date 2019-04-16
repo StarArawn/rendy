@@ -50,6 +50,10 @@ pub struct Pipeline {
 
     /// Primitive to use in the input assembler.
     pub input_assembler_desc: gfx_hal::pso::InputAssemblerDesc,
+
+    /// Custom scissor defaults to frame buffer width/height. 
+    /// Set to none for dynamic scissoring.
+    pub scissor: Option<gfx_hal::pso::Rect>,
 }
 
 /// Descriptor for simple graphics pipeline implementation.
@@ -125,6 +129,12 @@ pub trait SimpleGraphicsPipelineDesc<B: Backend, T: ?Sized>: std::fmt::Debug {
                 .depth_stencil()
                 .unwrap_or(gfx_hal::pso::DepthStencilDesc::default()),
             input_assembler_desc: self.input_assembler(),
+            scissor: Some(gfx_hal::pso::Rect {
+                x: 0,
+                y: 0,
+                w: 0,
+                h: 0,
+            }),
         }
     }
 
@@ -287,11 +297,24 @@ where
             push_vertex_desc(elemets, stride, rate, &mut vertex_buffers, &mut attributes);
         }
 
-        let rect = gfx_hal::pso::Rect {
+        let screen_rect = gfx_hal::pso::Rect {
             x: 0,
             y: 0,
             w: framebuffer_width as i16,
             h: framebuffer_height as i16,
+        };
+        let rect = {
+            let mut rect = None;
+            if pipeline.scissor.is_some() {
+                let pipeline_scissor = pipeline.scissor.unwrap();
+                if pipeline_scissor.x == 0 && pipeline_scissor.y == 0 && pipeline_scissor.w == 0 && pipeline_scissor.h == 0 {
+                    rect = Some(screen_rect);
+                } else {
+                    rect = pipeline.scissor;
+                };
+            }
+
+            rect
         };
 
         let graphics_pipeline = unsafe {
@@ -310,10 +333,10 @@ where
                     multisampling: None,
                     baked_states: gfx_hal::pso::BakedStates {
                         viewport: Some(gfx_hal::pso::Viewport {
-                            rect,
+                            rect: screen_rect,
                             depth: 0.0..1.0,
                         }),
-                        scissor: Some(rect),
+                        scissor: rect,
                         blend_color: None,
                         depth_bounds: None,
                     },

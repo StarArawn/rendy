@@ -303,6 +303,7 @@ where
             w: framebuffer_width as i16,
             h: framebuffer_height as i16,
         };
+        println!("screen_rect: {:?}", screen_rect);
         let rect = {
             let mut rect = None;
             if pipeline.scissor.is_some() {
